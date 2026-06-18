@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "gg-preview",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "DATA_DIR=/tmp/gg-prev PORT=4010 JWT_SECRET=prev node --import tsx server/src/index.ts"],
+      "port": 4010
+    }
+  ]
+}

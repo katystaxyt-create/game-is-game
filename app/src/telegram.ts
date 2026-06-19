@@ -39,6 +39,12 @@ export function initTelegram() {
   } catch { /* older clients */ }
 }
 
+// Цвет шапки/фона Telegram под текущий экран (плавная интеграция чрома).
+export function setChrome(color: string): void {
+  if (!tg) return
+  try { tg.setHeaderColor(color); tg.setBackgroundColor(color) } catch { /* older clients */ }
+}
+
 export function haptic(kind: 'tap' | 'select' | 'success' | 'warn' | 'heavy' = 'tap') {
   const h = tg?.HapticFeedback
   if (!h) return
@@ -66,5 +72,26 @@ export function openGame(link: string): void {
     else window.open(link, '_blank')
   } catch {
     window.open(link, '_blank')
+  }
+}
+
+// Скопировать текст в буфер. true — успех (для тоста).
+export async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text)
+    return true
+  } catch {
+    return false
+  }
+}
+
+// Поделиться приглашением через нативный диалог Telegram «Поделиться».
+export function shareInvite(url: string, text: string): void {
+  const share = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`
+  try {
+    if (tg?.openTelegramLink) tg.openTelegramLink(share)
+    else window.open(share, '_blank')
+  } catch {
+    window.open(share, '_blank')
   }
 }

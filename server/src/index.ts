@@ -5,10 +5,13 @@ import { join, dirname, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { existsSync } from 'node:fs'
 import './db'
+import { seedDev } from './devseed'
 import { api } from './api'
 import { bot, botWebhook } from './bot'
 import { DEV_MODE } from './auth'
 import { APP_URL } from './env'
+
+seedDev()
 
 const app = new Hono()
 app.route('/api', api)

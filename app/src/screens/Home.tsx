@@ -1,12 +1,21 @@
 import type { CSSProperties } from 'react'
 import { useStore } from '../store'
-import { BrandLogo } from './Logo'
+import { Avatar } from '../art/Avatar'
 import { GameTileIcon } from '../art/GameTileIcon'
-import { SoundOnIcon, SoundOffIcon, InfoIcon, HelpIcon, ChevronIcon } from '../art/icons'
-import { APP_TAG } from '../brand'
+import { SoundOnIcon, SoundOffIcon, HelpIcon, PlayIcon } from '../art/icons'
+import { levelInfo } from '@shared/progression'
 import type { GameCard } from '@shared/types'
 
 type IconId = 'uno' | 'croco' | 'mafia' | 'pet'
+
+function glow(hex: string, a = 0.22): string {
+  const h = hex.replace('#', '')
+  const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16)
+  return `rgba(${r},${g},${b},${a})`
+}
+function gameStyle(card: GameCard): CSSProperties {
+  return { '--a': card.accent, '--ad': card.accentDeep, '--glow': glow(card.accent) } as CSSProperties
+}
 
 export function Home() {
   const catalog = useStore(s => s.catalog)
@@ -15,66 +24,98 @@ export function Home() {
   const soundOn = useStore(s => s.soundOn)
   const toggleSound = useStore(s => s.toggleSound)
   const openSheet = useStore(s => s.openSheet)
-  const recentTop = recent[0] ?? null
+  const setTab = useStore(s => s.setTab)
+  const launch = useStore(s => s.launch)
+
   const firstName = profile?.name ? profile.name.split(' ')[0] : null
+  const recentCards = recent.map(id => catalog.find(g => g.id === id)).filter(Boolean) as GameCard[]
+  const featured = recentCards[0] ?? catalog[0]
+  const rest = catalog.filter(g => g.id !== featured?.id)
 
   return (
-    <div className="launcher rise">
+    <div className="tab-page stagger">
       <div className="topbar">
-        <div className="brandmark">GG</div>
-        <div className="topbar-actions">
-          <button className="icon-btn" onClick={toggleSound} aria-label={soundOn ? 'Выключить звук' : 'Включить звук'}>
-            {soundOn ? <SoundOnIcon /> : <SoundOffIcon />}
-          </button>
-          <button className="icon-btn" onClick={() => openSheet('help')} aria-label="Помощь"><HelpIcon /></button>
+        <div className="hello">
+          <div className="hi">{firstName ? 'С возвращением' : 'Привет 👋'}</div>
+          <div className="nm">{firstName ?? 'Game is Game'}</div>
         </div>
+        <button className="iconbtn" onClick={toggleSound} aria-label="Звук">
+          {soundOn ? <SoundOnIcon /> : <SoundOffIcon />}
+        </button>
+        <button className="iconbtn" onClick={() => openSheet('help')} aria-label="Помощь"><HelpIcon /></button>
       </div>
 
-      <div className="brand">
-        <BrandLogo />
-        <div className="brand-tag">{APP_TAG}</div>
-      </div>
+      {profile && <PlayerBanner onOpen={() => setTab('profile')} />}
 
-      {firstName && <div className="greet">С возвращением, <b>{firstName}</b></div>}
+      {recentCards.length > 0 && (
+        <>
+          <div className="sec"><h2>Продолжить</h2></div>
+          <div className="strip">
+            {recentCards.map(g => (
+              <button key={g.id} className="chip-game" style={gameStyle(g)} onClick={() => launch(g)}>
+                <GameTileIcon id={g.id as IconId} size={36} />
+                <span className="nm">{g.name}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
 
-      <div className="section-label">Выбери игру</div>
+      {featured && (
+        <>
+          <div className="sec"><h2>{recentCards.length ? 'Снова в деле' : 'Начни здесь'}</h2></div>
+          <button className="feature" style={gameStyle(featured)} onClick={() => launch(featured)}>
+            <GameTileIcon id={featured.id as IconId} size={76} />
+            <span className="ft">
+              <span className="t">{featured.name}</span>
+              <span className="s">{featured.tagline}</span>
+              <span className="play"><PlayIcon /> Играть</span>
+            </span>
+          </button>
+        </>
+      )}
 
-      <div className="game-list">
-        {catalog.map(g => (
-          <GameRow key={g.id} game={g} recent={g.id === recentTop} />
+      <div className="sec"><h2>Все игры</h2><span className="sub">{catalog.length} игры</span></div>
+      {catalog.length === 0 && (
+        <div className="empty"><div className="em">🎮</div><div className="t">Игры скоро появятся</div><div className="s">Загружаем игровую — загляни через минуту.</div></div>
+      )}
+      <div className="game-grid">
+        {rest.map(g => (
+          <button key={g.id} className="game-card" style={gameStyle(g)} onClick={() => launch(g)} aria-label={`Открыть ${g.name}`}>
+            {recent[0] === g.id && <span className="gc-flag">Недавнее</span>}
+            <span className="gc-icon"><GameTileIcon id={g.id as IconId} size={58} /></span>
+            <span className="gc-title">{g.name}</span>
+            <span className="gc-sub">{g.tagline}</span>
+            <span className="gc-play"><PlayIcon /> Играть</span>
+          </button>
         ))}
       </div>
-
-      <div className="foot">
-        <button className="foot-btn" onClick={() => openSheet('about')}><InfoIcon /> Об этом</button>
-        <button className="foot-btn" onClick={() => openSheet('help')}><HelpIcon /> Помощь</button>
-      </div>
-
-      <div className="foot-note">Сделано с любовью <span className="heart">♥</span></div>
     </div>
   )
 }
 
-function GameRow({ game, recent }: { game: GameCard; recent: boolean }) {
-  const launch = useStore(s => s.launch)
-  const style = { '--a': game.accent, '--glow': hexGlow(game.accent) } as CSSProperties
+function PlayerBanner({ onOpen }: { onOpen(): void }) {
+  const profile = useStore(s => s.profile)!
+  const lv = levelInfo(profile.xp)
   return (
-    <button className="game-row" style={style} onClick={() => launch(game)} aria-label={`Открыть: ${game.name}`}>
-      <span className="gi-wrap"><GameTileIcon id={game.id as IconId} size={62} /></span>
-      <span className="gr-text">
-        <span className="gr-title">{game.name}{recent && <span className="recent-chip">Недавнее</span>}</span>
-        <span className="gr-sub">{game.tagline}</span>
-      </span>
-      <span className="gr-go"><ChevronIcon /></span>
+    <button className="banner" onClick={onOpen} style={{ border: 'none', cursor: 'pointer' }}>
+      <div className="banner-top">
+        <Avatar id={profile.avatar} seed={profile.id} size={56} ring={false} />
+        <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+          <div className="nm2">{profile.name}</div>
+          <div className="tag2">Игрок Game is Game</div>
+        </div>
+        <span style={{ fontSize: 13, fontWeight: 900, background: 'rgba(255,255,255,.2)', padding: '6px 12px', borderRadius: 999, boxShadow: 'inset 0 0 0 1.5px rgba(255,255,255,.35)' }}>
+          Ур. {lv.level}
+        </span>
+      </div>
+      <div className="xp">
+        <div className="xp-row">
+          <span className="l">Уровень {lv.level}</span>
+          <span className="r">{lv.into} / {lv.span} XP</span>
+        </div>
+        <div className="xp-bar"><div className="xp-fill" style={{ width: `${Math.round(lv.pct * 100)}%` }} /></div>
+      </div>
     </button>
   )
-}
-
-// мягкое цветное свечение из hex акцента
-function hexGlow(hex: string): string {
-  const h = hex.replace('#', '')
-  const r = parseInt(h.slice(0, 2), 16)
-  const g = parseInt(h.slice(2, 4), 16)
-  const b = parseInt(h.slice(4, 6), 16)
-  return `rgba(${r},${g},${b},.42)`
 }

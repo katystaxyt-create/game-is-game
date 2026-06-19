@@ -1,5 +1,8 @@
 import { getInitData } from './telegram'
-import type { AuthResponse, GameCard, Profile } from '@shared/types'
+import type {
+  AuthResponse, GameCard, Profile, ProfileDetail,
+  Friend, ActivityItem, LeaderRow,
+} from '@shared/types'
 
 let token: string | null = sessionStorage.getItem('gg_jwt')
 
@@ -17,6 +20,12 @@ async function req<T>(path: string, body?: unknown): Promise<T> {
   return json as T
 }
 
+export interface SocialSnapshot {
+  friends: Friend[]
+  activity: ActivityItem[]
+  leaderboard: LeaderRow[]
+}
+
 export const api = {
   async auth(): Promise<AuthResponse> {
     const r = await req<AuthResponse>('/auth', { initData: getInitData() })
@@ -26,4 +35,11 @@ export const api = {
   },
   catalog: () => req<{ catalog: GameCard[] }>('/catalog'),
   open: (gameId: string) => req<{ profile: Profile; recent: string[] }>('/open', { gameId }),
+
+  profileDetail: () => req<ProfileDetail>('/profile/detail'),
+  updateProfile: (patch: { name?: string; avatar?: string }) => req<{ profile: Profile }>('/profile/update', patch),
+
+  social: () => req<SocialSnapshot>('/social'),
+  addFriend: (code: string) => req<{ friend: Friend; friends: Friend[] }>('/friends/add', { code }),
+  removeFriend: (friendId: number) => req<{ friends: Friend[] }>('/friends/remove', { friendId }),
 }

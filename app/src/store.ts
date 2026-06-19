@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { GameCard, Profile } from '@shared/types'
+import type { GameCard, Profile, ProfileDetail, Friend, ActivityItem, LeaderRow } from '@shared/types'
 import { GAMES, defaultLink } from '@shared/games'
 import { api } from './api'
 import { haptic, openGame as openGameLink, getStartParam, inTelegram } from './telegram'
@@ -8,38 +8,69 @@ import { playSfx, isSoundOn, setSoundOn } from './sound'
 // Статичный каталог на случай, если сервер недоступен (гость, офлайн).
 const STATIC_CATALOG: GameCard[] = GAMES.map(g => ({ ...g, link: defaultLink(g.bot) }))
 
-type Sheet = 'about' | 'help' | null
+export type Tab = 'home' | 'friends' | 'activity' | 'profile'
+type Sheet = 'about' | 'help' | 'settings' | 'editProfile' | null
 
 interface S {
   ready: boolean
+  tab: Tab
   profile: Profile | null
   catalog: GameCard[]
   recent: string[]
+  detail: ProfileDetail | null
+  friends: Friend[]
+  activity: ActivityItem[]
+  leaderboard: LeaderRow[]
+  socialLoaded: boolean
   sheet: Sheet
   soundOn: boolean
-  launching: string | null
+  toast: string | null
+  botUsername: string
 
   init(): Promise<void>
+  setTab(t: Tab): void
   launch(card: GameCard): void
   openSheet(s: Sheet): void
   toggleSound(): void
+  showToast(msg: string): void
+
+  loadSocial(): Promise<void>
+  loadDetail(): Promise<void>
+  addFriend(code: string): Promise<{ ok: boolean; error?: string; name?: string }>
+  removeFriend(id: number): Promise<void>
+  saveProfile(patch: { name?: string; avatar?: string }): Promise<void>
 }
+
+let toastTimer: ReturnType<typeof setTimeout> | null = null
 
 export const useStore = create<S>((set, get) => ({
   ready: false,
+  tab: 'home',
   profile: null,
   catalog: STATIC_CATALOG,
   recent: [],
+  detail: null,
+  friends: [],
+  activity: [],
+  leaderboard: [],
+  socialLoaded: false,
   sheet: null,
   soundOn: isSoundOn(),
-  launching: null,
+  toast: null,
+  botUsername: 'game_is_game_bot',
 
   async init() {
-    let autoOpenId: string | null = null
+    let startParam: string | null = null
     try {
       const r = await api.auth()
-      set({ profile: r.profile, catalog: r.catalog?.length ? r.catalog : STATIC_CATALOG, recent: r.recent ?? [], ready: true })
-      if (r.startParam && r.catalog?.some(g => g.id === r.startParam)) autoOpenId = r.startParam
+      set({
+        profile: r.profile,
+        catalog: r.catalog?.length ? r.catalog : STATIC_CATALOG,
+        recent: r.recent ?? [],
+        botUsername: r.botUsername || get().botUsername,
+        ready: true,
+      })
+      startParam = r.startParam
     } catch {
       // гость или офлайн: показываем меню из публичного каталога или статики
       try {
@@ -48,25 +79,43 @@ export const useStore = create<S>((set, get) => ({
       } catch {
         set({ ready: true })
       }
-      const sp = getStartParam()
-      if (sp && get().catalog.some(g => g.id === sp)) autoOpenId = sp
+      startParam = getStartParam()
     }
-    // Прямая ссылка на игру через лаунчер: t.me/<bot>?startapp=<gameId>
-    if (autoOpenId && inTelegram) {
-      const card = get().catalog.find(g => g.id === autoOpenId)
+
+    // Диплинк-приглашение в друзья: ?startapp=add_<CODE>
+    if (startParam?.startsWith('add_') && get().profile) {
+      const code = startParam.slice(4)
+      const res = await get().addFriend(code)
+      if (res.ok) {
+        set({ tab: 'friends' })
+        get().showToast(`${res.name ?? 'Друг'} теперь в друзьях 🎉`)
+      }
+    } else if (startParam && get().catalog.some(g => g.id === startParam) && inTelegram) {
+      // Прямая ссылка на игру через хаб: ?startapp=<gameId>
+      const card = get().catalog.find(g => g.id === startParam)
       if (card) get().launch(card)
     }
+  },
+
+  setTab(tab) {
+    if (tab === get().tab) return
+    haptic('select')
+    set({ tab })
+    if ((tab === 'friends' || tab === 'activity') && !get().socialLoaded) void get().loadSocial()
+    if (tab === 'profile') void get().loadDetail()
   },
 
   launch(card) {
     haptic('heavy')
     if (get().soundOn) playSfx('open')
-    set({ launching: card.id, recent: [card.id, ...get().recent.filter(id => id !== card.id)] })
+    set({ recent: [card.id, ...get().recent.filter(id => id !== card.id)] })
     // Открываем игру СРАЗУ, синхронно в обработчике нажатия: Telegram игнорирует
     // openTelegramLink, вызванный с задержкой (теряется «жест пользователя»).
     openGameLink(card.link)
     // Фиксируем открытие на сервере в фоне, не блокируя запуск.
-    api.open(card.id).then(r => set({ profile: r.profile, recent: r.recent })).catch(() => {})
+    api.open(card.id).then(r => {
+      set({ profile: r.profile, recent: r.recent, socialLoaded: false, detail: null })
+    }).catch(() => {})
   },
 
   openSheet(sheet) {
@@ -80,5 +129,60 @@ export const useStore = create<S>((set, get) => ({
     setSoundOn(next)
     set({ soundOn: next })
     haptic('select')
+  },
+
+  showToast(msg) {
+    set({ toast: msg })
+    if (toastTimer) clearTimeout(toastTimer)
+    toastTimer = setTimeout(() => set({ toast: null }), 2400)
+  },
+
+  async loadSocial() {
+    try {
+      const r = await api.social()
+      set({ friends: r.friends, activity: r.activity, leaderboard: r.leaderboard, socialLoaded: true })
+    } catch { /* офлайн — оставляем что есть */ }
+  },
+
+  async loadDetail() {
+    try {
+      const detail = await api.profileDetail()
+      set({ detail, profile: detail.profile })
+    } catch { /* офлайн */ }
+  },
+
+  async addFriend(code) {
+    try {
+      const r = await api.addFriend(code)
+      set({ friends: r.friends, socialLoaded: true })
+      haptic('success')
+      return { ok: true, name: r.friend.name }
+    } catch (e) {
+      haptic('warn')
+      return { ok: false, error: (e as { message?: string }).message ?? 'request_failed' }
+    }
+  },
+
+  async removeFriend(id) {
+    try {
+      const r = await api.removeFriend(id)
+      set({ friends: r.friends })
+      haptic('tap')
+    } catch { /* ignore */ }
+  },
+
+  async saveProfile(patch) {
+    try {
+      const r = await api.updateProfile(patch)
+      set({ profile: r.profile, sheet: null })
+      // обновим производные данные
+      void get().loadDetail()
+      set({ socialLoaded: false })
+      haptic('success')
+      get().showToast('Профиль обновлён ✨')
+    } catch {
+      haptic('warn')
+      get().showToast('Не удалось сохранить')
+    }
   },
 }))

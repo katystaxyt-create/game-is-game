@@ -62,13 +62,11 @@ export const useStore = create<S>((set, get) => ({
     haptic('heavy')
     if (get().soundOn) playSfx('open')
     set({ launching: card.id, recent: [card.id, ...get().recent.filter(id => id !== card.id)] })
-    // фиксируем открытие на сервере (не блокируя запуск)
+    // Открываем игру СРАЗУ, синхронно в обработчике нажатия: Telegram игнорирует
+    // openTelegramLink, вызванный с задержкой (теряется «жест пользователя»).
+    openGameLink(card.link)
+    // Фиксируем открытие на сервере в фоне, не блокируя запуск.
     api.open(card.id).then(r => set({ profile: r.profile, recent: r.recent })).catch(() => {})
-    // небольшая пауза, чтобы плитка успела «нажаться», затем открываем игру
-    setTimeout(() => {
-      openGameLink(card.link)
-      set({ launching: null })
-    }, 180)
   },
 
   openSheet(sheet) {

@@ -19,6 +19,7 @@ interface S {
   recent: string[]
   favorites: string[]
   ratings: Record<string, RatingValue>
+  follows: string[]
   meta: Record<string, GameMeta>
   quests: Quest[]
   /** id игры, открытой в карточке-шторке (null = закрыто). */
@@ -42,6 +43,7 @@ interface S {
   launch(card: GameCard): void
   openGameSheet(id: string | null): void
   toggleFavorite(id: string): Promise<void>
+  toggleFollow(id: string): Promise<void>
   rate(id: string, value: RatingValue | 0): Promise<void>
   refreshQuests(): Promise<void>
   claimQuest(id: string): Promise<void>
@@ -70,6 +72,7 @@ export const useStore = create<S>((set, get) => ({
   recent: [],
   favorites: [],
   ratings: {},
+  follows: [],
   meta: {},
   quests: [],
   gameSheet: null,
@@ -97,6 +100,7 @@ export const useStore = create<S>((set, get) => ({
         recent: r.recent ?? [],
         favorites: r.favorites ?? [],
         ratings: r.ratings ?? {},
+        follows: r.follows ?? [],
         meta: r.meta ?? {},
         quests: r.quests ?? [],
         botUsername: r.botUsername || get().botUsername,
@@ -219,6 +223,21 @@ export const useStore = create<S>((set, get) => ({
     } catch {
       set({ favorites: was })
       get().showToast('Не удалось обновить избранное')
+    }
+  },
+
+  async toggleFollow(id) {
+    const was = get().follows
+    const next = was.includes(id) ? was.filter(f => f !== id) : [id, ...was]
+    set({ follows: next })
+    haptic('select')
+    try {
+      const r = await api.toggleFollow(id)
+      set({ follows: r.follows, meta: r.meta })
+      if (r.following) get().showToast('Подпишем на новости этой игры 🔔')
+    } catch {
+      set({ follows: was })
+      get().showToast('Не удалось обновить подписку')
     }
   },
 

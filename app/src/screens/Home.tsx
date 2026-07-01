@@ -237,20 +237,23 @@ function GameSheet() {
   const meta = useStore(s => s.meta)
   const ratings = useStore(s => s.ratings)
   const favorites = useStore(s => s.favorites)
+  const follows = useStore(s => s.follows)
   const botUsername = useStore(s => s.botUsername)
   const rate = useStore(s => s.rate)
   const toggleFavorite = useStore(s => s.toggleFavorite)
+  const toggleFollow = useStore(s => s.toggleFollow)
   const openGameSheet = useStore(s => s.openGameSheet)
   const launch = useStore(s => s.launch)
 
   const g = id ? catalog.find(x => x.id === id) : null
   if (!g) return null
 
-  const m = meta[g.id] ?? { opens: 0, likes: 0, dislikes: 0 }
+  const m = meta[g.id] ?? { opens: 0, likes: 0, dislikes: 0, followers: 0 }
   const votes = m.likes + m.dislikes
   const likePct = votes > 0 ? Math.round((m.likes / votes) * 100) : null
   const my = ratings[g.id]
   const fav = favorites.includes(g.id)
+  const followed = follows.includes(g.id)
   const playersRu = g.players === 'solo' ? 'Одиночная' : g.players === 'multi' ? 'С друзьями' : 'Один и с друзьями'
 
   return (
@@ -286,14 +289,17 @@ function GameSheet() {
           <button className={`rate-btn ${fav ? 'on-fav' : ''}`} onClick={() => void toggleFavorite(g.id)}>
             {fav ? '⭐ В избранном' : '☆ В избранное'}
           </button>
-          <button
-            className="rate-btn"
-            onClick={() => shareInvite(
-              `https://t.me/${botUsername}?startapp=${g.id}`,
-              `Играю в «${g.name}» в Game is Game — залетай! 🎮`,
-            )}
-          >📤 Поделиться</button>
+          <button className={`rate-btn ${followed ? 'on-fav' : ''}`} onClick={() => void toggleFollow(g.id)}>
+            {followed ? '🔔 Слежу' : '🔕 Следить'}{m.followers > 0 ? ` · ${m.followers}` : ''}
+          </button>
         </div>
+        <button
+          className="rate-btn fav-row"
+          onClick={() => shareInvite(
+            `https://t.me/${botUsername}?startapp=${g.id}`,
+            `Играю в «${g.name}» в Game is Game — залетай! 🎮`,
+          )}
+        >📤 Поделиться с друзьями</button>
         <button className="btn accent" style={{ width: '100%', marginTop: 10 }} onClick={() => { openGameSheet(null); launch(g) }}>
           <PlayIcon /> Играть
         </button>

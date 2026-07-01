@@ -10,6 +10,14 @@ export const BOT_USERNAME = process.env.BOT_USERNAME ?? 'game_is_game_bot'
 // so the defaults from shared/games.ts win.
 const IDS = GAMES.map(g => g.id)
 
+/** Telegram id админов (ADMIN_IDS=123,456): им доступна команда /announce. */
+export const ADMIN_IDS = new Set(
+  (process.env.ADMIN_IDS ?? '')
+    .split(',')
+    .map(s => Number.parseInt(s.trim(), 10))
+    .filter(n => Number.isFinite(n) && n > 0),
+)
+
 export function gameOverrides(): Record<string, { bot?: string; link?: string }> {
   const out: Record<string, { bot?: string; link?: string }> = {}
   for (const id of IDS) {

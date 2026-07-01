@@ -44,11 +44,12 @@ export interface GameStat {
   opens: number
 }
 
-/** Глобальные агрегаты по игре: запуски и оценки всех игроков. */
+/** Глобальные агрегаты по игре: запуски, оценки и подписчики. */
 export interface GameMeta {
   opens: number
   likes: number
   dislikes: number
+  followers: number
 }
 
 /** Личная оценка игры: нравится или нет. */
@@ -154,6 +155,8 @@ export interface AuthResponse {
   favorites: string[]
   /** Мои оценки игр. */
   ratings: Record<string, RatingValue>
+  /** Игры, на которые я подписан(а). */
+  follows: string[]
   /** Глобальные агрегаты по играм (запуски, лайки). */
   meta: Record<string, GameMeta>
   /** Задания дня. */

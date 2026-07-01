@@ -1,9 +1,10 @@
 import { Bot, webhookCallback } from 'grammy'
 import { BOT_TOKEN } from './auth'
-import { APP_URL, BOT_USERNAME, gameOverrides } from './env'
+import { ADMIN_IDS, APP_URL, BOT_USERNAME, gameOverrides } from './env'
 import { buildCatalog, GAMES, CATEGORIES } from '../../shared/games'
 import { REFERRER_REWARD, REFERRED_BONUS, REF_PREFIX, inviteLink } from '../../shared/referrals'
 import { getOrCreateUser } from './profiles'
+import { followerIds } from './catalog'
 
 export const bot = BOT_TOKEN ? new Bot(BOT_TOKEN) : null
 
@@ -127,6 +128,38 @@ if (bot) {
 
   bot.command('about', async ctx => {
     await ctx.reply(ABOUT, { reply_markup: appKeyboard() })
+  })
+
+  // Новость по игре всем её подписчикам: /announce <gameId> <текст>.
+  // Только для админов (ADMIN_IDS); это движок «подписался — узнал первым».
+  bot.command('announce', async ctx => {
+    if (!ctx.from || !ADMIN_IDS.has(ctx.from.id)) return
+    const m = (typeof ctx.match === 'string' ? ctx.match : '').trim()
+    const space = m.indexOf(' ')
+    const gameId = space === -1 ? m : m.slice(0, space)
+    const text = space === -1 ? '' : m.slice(space + 1).trim()
+    const game = GAMES.find(g => g.id === gameId)
+    if (!game || !text) {
+      await ctx.reply('Так: /announce <id игры> <текст>. Id смотри в shared/games.ts (например viselitsa).')
+      return
+    }
+    const ids = followerIds(game.id)
+    if (ids.length === 0) {
+      await ctx.reply(`У «${game.name}» пока нет подписчиков.`)
+      return
+    }
+    const card = buildCatalog(gameOverrides()).find(g => g.id === game.id)
+    const markup = { inline_keyboard: [[{ text: `${game.emoji} Открыть ${game.name}`, url: card?.link ?? '' }]] }
+    let sent = 0
+    for (const uid of ids) {
+      try {
+        await ctx.api.sendMessage(uid, `${game.emoji} ${game.name}: новости\n\n${text}`, { reply_markup: markup })
+        sent++
+      } catch { /* игрок не запускал бота или заблокировал его */ }
+      // Мягкий темп, чтобы не упереться в лимиты Bot API (~30 сообщений/с).
+      await new Promise(r => setTimeout(r, 50))
+    }
+    await ctx.reply(`Разослано подписчикам «${game.name}»: ${sent} из ${ids.length}.`)
   })
 
   bot.command('help', async ctx => {

@@ -4,7 +4,7 @@ import { GAMES } from '../../shared/games'
 
 const VALID_GAME_IDS = new Set(GAMES.map(g => g.id))
 
-/** Глобальные агрегаты по играм: запуски и оценки. Для чартов и карточек. */
+/** Глобальные агрегаты по играм: запуски, оценки, подписчики. */
 export function gameMeta(): Record<string, GameMeta> {
   const opens = db
     .prepare('SELECT game_id AS id, COUNT(*) AS n FROM opens GROUP BY game_id')
@@ -15,11 +15,39 @@ export function gameMeta(): Record<string, GameMeta> {
                      SUM(CASE WHEN value = -1 THEN 1 ELSE 0 END) AS dislikes
               FROM ratings GROUP BY game_id`)
     .all() as { id: string; likes: number; dislikes: number }[]
+  const fans = db
+    .prepare('SELECT game_id AS id, COUNT(*) AS n FROM follows GROUP BY game_id')
+    .all() as { id: string; n: number }[]
   const meta: Record<string, GameMeta> = {}
-  for (const g of GAMES) meta[g.id] = { opens: 0, likes: 0, dislikes: 0 }
+  for (const g of GAMES) meta[g.id] = { opens: 0, likes: 0, dislikes: 0, followers: 0 }
   for (const r of opens) if (meta[r.id]) meta[r.id].opens = r.n
   for (const r of votes) if (meta[r.id]) { meta[r.id].likes = r.likes ?? 0; meta[r.id].dislikes = r.dislikes ?? 0 }
+  for (const r of fans) if (meta[r.id]) meta[r.id].followers = r.n
   return meta
+}
+
+// ─── Подписки на игры ────────────────────────────────────────────────────
+
+export function followsOf(uid: number): string[] {
+  const rows = db
+    .prepare('SELECT game_id FROM follows WHERE user_id=? ORDER BY created_at DESC')
+    .all(uid) as { game_id: string }[]
+  return rows.map(r => r.game_id).filter(id => VALID_GAME_IDS.has(id))
+}
+
+export function toggleFollow(uid: number, gameId: string): { following: boolean; follows: string[] } {
+  if (!VALID_GAME_IDS.has(gameId)) return { following: false, follows: followsOf(uid) }
+  const removed = db.prepare('DELETE FROM follows WHERE user_id=? AND game_id=?').run(uid, gameId)
+  if (removed.changes === 0) {
+    db.prepare('INSERT INTO follows (user_id, game_id) VALUES (?,?)').run(uid, gameId)
+  }
+  return { following: removed.changes === 0, follows: followsOf(uid) }
+}
+
+/** Telegram id всех подписчиков игры (для рассылки /announce). */
+export function followerIds(gameId: string): number[] {
+  return (db.prepare('SELECT user_id FROM follows WHERE game_id=?').all(gameId) as { user_id: number }[])
+    .map(r => r.user_id)
 }
 
 // ─── Избранное ───────────────────────────────────────────────────────────

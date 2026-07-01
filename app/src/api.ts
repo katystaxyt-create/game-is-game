@@ -40,6 +40,8 @@ export const api = {
   toggleFavorite: (gameId: string) => req<{ favorite: boolean; favorites: string[] }>('/favorites/toggle', { gameId }),
   rate: (gameId: string, value: RatingValue | 0) =>
     req<{ ratings: Record<string, RatingValue>; meta: Record<string, GameMeta> }>('/rate', { gameId, value }),
+  toggleFollow: (gameId: string) =>
+    req<{ following: boolean; follows: string[]; meta: Record<string, GameMeta> }>('/follow/toggle', { gameId }),
   quests: () => req<{ quests: Quest[] }>('/quests'),
   claimQuest: (questId: string) => req<{ reward: number; profile: Profile; quests: Quest[] }>('/quests/claim', { questId }),
   gift: (friendId: number, amount: number) => req<{ amount: number; profile: Profile; friends: Friend[] }>('/gift', { friendId, amount }),

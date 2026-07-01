@@ -9,7 +9,7 @@ import { bot } from './bot'
 import { applyReferral } from './referrals'
 import { REF_PREFIX } from '../../shared/referrals'
 import { wardrobeOf, equip, buy } from './cosmetics'
-import { gameMeta, favoritesOf, toggleFavorite, ratingsOf, rate } from './catalog'
+import { gameMeta, favoritesOf, toggleFavorite, ratingsOf, rate, followsOf, toggleFollow } from './catalog'
 import { buildCatalog, GAMES } from '../../shared/games'
 
 export const api = new Hono<Env>()
@@ -48,6 +48,7 @@ api.post('/auth', async c => {
     recent: recentGames(v.user.id),
     favorites: favoritesOf(v.user.id),
     ratings: ratingsOf(v.user.id),
+    follows: followsOf(v.user.id),
     meta: gameMeta(),
     quests: questsOf(v.user.id),
     referral,
@@ -130,6 +131,12 @@ api.post('/favorites/toggle', async c => {
   const parsed = favSchema.safeParse(await c.req.json().catch(() => null))
   if (!parsed.success || !VALID_IDS.has(parsed.data.gameId)) return c.json({ error: 'bad_request' }, 400)
   return c.json(toggleFavorite(c.get('uid'), parsed.data.gameId))
+})
+
+api.post('/follow/toggle', async c => {
+  const parsed = favSchema.safeParse(await c.req.json().catch(() => null))
+  if (!parsed.success || !VALID_IDS.has(parsed.data.gameId)) return c.json({ error: 'bad_request' }, 400)
+  return c.json({ ...toggleFollow(c.get('uid'), parsed.data.gameId), meta: gameMeta() })
 })
 
 const rateSchema = z.object({ gameId: z.string().min(1).max(32), value: z.union([z.literal(1), z.literal(-1), z.literal(0)]) })

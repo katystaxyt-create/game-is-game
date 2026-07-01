@@ -30,6 +30,9 @@ const VALID_GAME_IDS = new Set(GAMES.map(g => g.id))
 /** Экономика Game: бонус за регистрацию и заработок за запуск игры. */
 export const STARTER_COINS = 300
 export const COINS_PER_OPEN = 25
+/** Столько запусков в день оплачиваются монетами: дальше играй бесплатно,
+ *  но без начислений. Иначе монеты фармятся спамом по плиткам. */
+export const DAILY_PAID_OPENS = 20
 
 // ─── Код друга ───────────────────────────────────────────────────────────
 // Без похожих символов (0/O, 1/I), чтобы код легко диктовать и набирать.
@@ -163,10 +166,15 @@ export function recordOpen(id: number, gameId: string): Profile {
   // Если игрок впервые появляется через /open (а не /auth), всё равно даём
   // стартовый баланс — чтобы экономика была одинаковой на любом пути входа.
   db.prepare("INSERT OR IGNORE INTO users (id, name, coins) VALUES (?, 'Игрок', ?)").run(id, STARTER_COINS)
+  const paidToday = (db
+    .prepare("SELECT COUNT(*) AS n FROM opens WHERE user_id=? AND date(ts)=date('now')")
+    .get(id) as { n: number }).n
   db.prepare('INSERT INTO opens (user_id, game_id) VALUES (?,?)').run(id, gameId)
-  // last_seen must advance on every launch (friends ordering + «в сети»),
-  // and each launch pays out Game coins to feed the cosmetics economy.
-  db.prepare("UPDATE users SET opens=opens+1, coins=coins+?, last_seen=datetime('now') WHERE id=?").run(COINS_PER_OPEN, id)
+  // last_seen must advance on every launch (friends ordering + «в сети»).
+  // Coins feed the cosmetics economy, but only the first launches of the day
+  // pay out: unlimited payouts would make the purchasable coin farmable.
+  const coins = paidToday < DAILY_PAID_OPENS ? COINS_PER_OPEN : 0
+  db.prepare("UPDATE users SET opens=opens+1, coins=coins+?, last_seen=datetime('now') WHERE id=?").run(coins, id)
   return getProfile(id)!
 }
 

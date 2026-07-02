@@ -47,6 +47,18 @@ export interface GameDef {
 // Порядок здесь = порядок плиток в меню (флагманы первыми).
 export const GAMES: GameDef[] = [
   {
+    id: 'chekharda',
+    name: 'Чехарда',
+    tagline: '3D шоу на вылет за короной',
+    blurb: 'Безумная 3D полоса препятствий: шестнадцать зефирок, три раунда на вылет, одна корона.',
+    emoji: '🍡',
+    accent: '#ff5fa8',
+    accentDeep: '#c93b7f',
+    bot: 'sisiisisisididjskekejbot',
+    category: 'arcade',
+    players: 'multi',
+  },
+  {
     id: 'uno',
     name: 'Однушечка',
     tagline: 'Карты по цвету и числу',
